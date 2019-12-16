@@ -117,6 +117,7 @@ def prepare_random_batches(device, read_data, batch_chunk_len, sub_batch_size,
         chunk_batch, batch_rejections = \
             chunk_selection.assemble_batch(read_data, sub_batch_size,
                                            batch_chunk_len, filter_params)
+        # Has N reads in {read_data}, filters away dirty reads, splits the rest into batches of size {sub_batch_size}
         if len(chunk_batch) < sub_batch_size:
             log.write('* Warning: only {} chunks passed filters (asked for {}).\n'.format(len(chunk_batch), sub_batch_size))
 
@@ -130,6 +131,7 @@ def prepare_random_batches(device, read_data, batch_chunk_len, sub_batch_size,
         stacked_current = np.vstack([d['current'] for d in chunk_batch]).T
         indata = torch.tensor( stacked_current, device=device,
                                             dtype=torch.float32 ).unsqueeze(2)
+        # Not entirely sure what happens here, but we create our tensor an it has the shape as described.
 
         # Prepare seqs, seqlens and (if necessary) mod_cats
         seqs, seqlens = [], []
@@ -145,12 +147,13 @@ def prepare_random_batches(device, read_data, batch_chunk_len, sub_batch_size,
                 chunk_labels = np.ascontiguousarray(
                     network.sublayers[-1].can_labels[chunk_labels])
             chunk_seq = flipflopfings.flipflop_code(
-                chunk_labels, alphabet_info.ncan_base)
+                chunk_labels, alphabet_info.ncan_base)  # JUICY!!
             seqs.append(chunk_seq)
+        # This part adds the flipflop encoding to all chuncks. Definitely go read flipflop_code()
 
         seqs = torch.tensor(
-            np.concatenate(seqs), dtype=torch.float32, device=device)
-        seqlens = torch.tensor(seqlens, dtype=torch.long, device=device)
+            np.concatenate(seqs), dtype=torch.float32, device=device)  # creates a tensor with all the chunks
+        seqlens = torch.tensor(seqlens, dtype=torch.long, device=device)  # creates a tensor with all the chunks lengths...? but why?
         if network_is_catmod:
             mod_cats = torch.tensor(
                 np.concatenate(mod_cats), dtype=torch.long, device=device)
@@ -181,7 +184,7 @@ def calculate_loss( network, network_is_catmod, batch_gen, sharpen,
 
         total_chunk_count += sub_batch_size
 
-        with torch.set_grad_enabled(calc_grads):
+        with torch.set_grad_enabled(calc_grads):  # calc_grads is set to True down in main()
             outputs = network(indata)
             if network_is_catmod:
                 lossvector = ctc.cat_mod_flipflop_loss(
@@ -190,6 +193,7 @@ def calculate_loss( network, network_is_catmod, batch_gen, sharpen,
             else:
                 lossvector = ctc.crf_flipflop_loss(
                     outputs, seqs, seqlens, sharpen)
+                # Does something about the loss related to ctc, but this code is in Cython so I don't understand :(
 
             non_zero_seqlens = (seqlens > 0.0).float().sum()
             # In multi-GPU mode, gradients are synchronised when
@@ -219,6 +223,7 @@ def main():
     is_multi_gpu = (args.local_rank is not None)
     is_lead_process = (not is_multi_gpu) or args.local_rank == 0
 
+    # We don't care about multi_gpu
     if is_multi_gpu:
         #Use distributed parallel processing to run one process per GPU
         try:
@@ -234,24 +239,29 @@ def main():
             #Make sure processes get different random picks of training data
             np.random.seed(args.seed + args.local_rank)
     else:
-        device = helpers.set_torch_device(args.device)
+        device = helpers.set_torch_device(args.device)  # Vi kan bare køre CPU men det skal helst kunne køre på GPU senere
         np.random.seed(args.seed)
 
-    if is_lead_process:
-        helpers.prepare_outdir(args.outdir, args.overwrite)
+    if is_lead_process:  # Når det er på CPU vil dette altid være lead_process. Se definitionen af is_lead_process
+        helpers.prepare_outdir(args.outdir, args.overwrite)  # Simpel funktion til at oprette output directory + undgå at overskrive
         if args.model.endswith('.py'):
-            copyfile(args.model, os.path.join(args.outdir, 'model.py'))
-        batchlog = helpers.BatchLog(args.outdir)
+            copyfile(args.model, os.path.join(args.outdir, 'model.py'))  # Kopiere ens python model fil over i output dir.
+            # Hvad mon der sker hvis det ikke er en .py men .checkpoint?
+        batchlog = helpers.BatchLog(args.outdir)  # Opretter et Batchlog instans af batchlog.
+        # Batchlog docstring: "Used to record three-column tsv file containing loss, gradient norm and gradient norm cap
+        # for every training step"
         logfile = os.path.join(args.outdir, 'model.log')
     else:
         logfile = None
 
-    log = helpers.Logger(logfile, args.quiet)
+    log = helpers.Logger(logfile, args.quiet)  # Åbner en fil til at logge trænings resultater
     log.write(helpers.formatted_env_info(device))
 
     log.write('* Loading data from {}\n'.format(args.input))
     log.write('* Per read file MD5 {}\n'.format(helpers.file_md5(args.input)))
 
+    #  Jeg tror dette argument bruges som et parameter til at vælge et subset af read man vil træne på,
+    #  ved at give en liste af read_ids.
     if args.input_strand_list is not None:
         read_ids = list(set(helpers.get_read_ids(args.input_strand_list)))
         log.write(('* Will train from a subset of {} strands, determined ' +
@@ -260,16 +270,21 @@ def main():
         log.write('* Reads not filtered by id\n')
         read_ids = 'all'
 
+    #  Endnu et parameter til at vælge et subset af reads.
     if args.limit is not None:
         log.write('* Limiting number of strands to {}\n'.format(args.limit))
 
+    #  HDF5 filen åbnes
     with mapped_signal_files.HDF5Reader(args.input) as per_read_file:
-        alphabet_info = per_read_file.get_alphabet_information()
+        alphabet_info = per_read_file.get_alphabet_information()  # Jeg er ikke sikker på hvordan får alphabet
+        # informationen ud ved at kigge på dokumentationen.
+        # Men jeg tror det kun er relevant hvis man har modificerede baser
         read_data = per_read_file.get_multiple_reads(
             read_ids, max_reads=args.limit)
         # read_data now contains a list of reads
         # (each an instance of the Read class defined in
         # mapped_signal_files.py, based on dict)
+        # Der står rigtig meget vigtig info i Read klassen. Jeg har også skrevet kommentarer der.
     log.write('* Using alphabet definition: {}\n'.format(str(alphabet_info)))
 
     if len(read_data) == 0:
@@ -280,10 +295,14 @@ def main():
     # Get parameters for filtering by sampling a subset of the reads
     # Result is a tuple median mean_dwell, mad mean_dwell
     # Choose a chunk length in the middle of the range for this
+    # chunk_len_min er 2000, chunk_len_max er 4000
     sampling_chunk_len = (args.chunk_len_min + args.chunk_len_max) // 2
     filter_params = chunk_selection.sample_filter_parameters(
-        read_data, args.sample_nreads_before_filtering, sampling_chunk_len,
+        read_data, args.sample_nreads_before_filtering, sampling_chunk_len,  # sample_nreads_before_filtering er 1000
         args.filter_mean_dwell, args.filter_max_dwell)
+    # Efter at have gravet ind i koden her over, ser det ud til at dwell er det antal dacs der passer til en reference base.
+    # Dette kan regnes ud for hver enkelt base i referencen og mean_dwell = len(current) / len(reference)
+    # Dette stykke kode forbereder blot filter parameterne som først bruges langt senere.
 
     log.write("* Sampled {} chunks".format(args.sample_nreads_before_filtering))
     log.write(": median(mean_dwell)={:.2f}".format(
@@ -291,6 +310,8 @@ def main():
     log.write(", mad(mean_dwell)={:.2f}\n".format(
         filter_params.mad_meandwell))
     log.write('* Reading network from {}\n'.format(args.model))
+
+    # Stride er 2, Winlen er 19, size er "Base layer size for model"
     model_kwargs = {
         'stride': args.stride,
         'winlen': args.winlen,
@@ -306,7 +327,7 @@ def main():
         # need a clone of the start network to use as a template for saving
         # checkpoints. Necessary because DistributedParallel makes the class
         # structure different.
-        network_save_skeleton = helpers.load_model(args.model, **model_kwargs)
+        network_save_skeleton = helpers.load_model(args.model, **model_kwargs)  # Loads the torch.nn model. See taiyaki/models. Can also load checkpoints
         log.write('* Network has {} parameters.\n'.format(
                   sum([p.nelement() for p in network_save_skeleton.parameters()])))
         if not alphabet_info.is_compatible_model(network_save_skeleton):
@@ -314,7 +335,7 @@ def main():
                 '* ERROR: Model and mapped signal files contain incompatible ' +
                 'alphabet definitions (including modified bases).')
             sys.exit(1)
-        if is_cat_mod_model(network_save_skeleton):
+        if is_cat_mod_model(network_save_skeleton):  # We shouldn't have modified bases in our data
             log.write('* Loaded categorical modified base model.\n')
             if not alphabet_info.contains_modified_bases():
                 sys.stderr.write(
@@ -331,8 +352,10 @@ def main():
                 sys.exit(1)
         log.write('* Dumping initial model\n')
         helpers.save_model(network_save_skeleton, args.outdir, 0)
+        #  Gemmer pytorch modellen med torch.save() og modellens state gemes i en .params fil
+        #  torch.save() bruger gemmer det vidst som en pickled version
 
-    if is_multi_gpu:
+    if is_multi_gpu:  # Ignorerer den her
         #so that processes 1,2,3.. don't try to load before process 0 has saved
         torch.distributed.barrier()
         log.write('* MultiGPU process {}'.format(args.local_rank))
@@ -346,19 +369,20 @@ def main():
                                             output_device=args.local_rank)
     else:
         network = network_save_skeleton.to(device)
+        # Jeg ved ikke helt hvordan det .to(device) fungerer, men det bestemmer om det kører på cpu eller gpu
         network_save_skeleton = None
 
     optimizer = torch.optim.Adam(network.parameters(), lr=args.lr_max,
                                  betas=args.adam,
                                  weight_decay=args.weight_decay,
-                                 eps=args.eps)
-
+                                 eps=args.eps)  # Vores optimizer
+    # lr_warmup er None som default hvilket gør den bliver lr_min hvilken er 1.0e-4
     if args.lr_warmup is None:
         lr_warmup = args.lr_min
     else:
         lr_warmup = args.lr_warmup
 
-    if args.lr_frac_decay is not None:
+    if args.lr_frac_decay is not None:  # lr_frac_decay er som default None, så hop ned til else
         lr_scheduler = optim.ReciprocalLR(optimizer, args.lr_frac_decay,
                                           args.warmup_batches, lr_warmup)
         log.write('* Learning rate schedule lr_max*k/(k+t)')
@@ -373,16 +397,16 @@ def main():
     log.write('* At start, train for {} '.format(args.warmup_batches))
     log.write('batches at warm-up learning rate {:3.2}\n'.format(lr_warmup))
 
-    score_smoothed = helpers.WindowedExpSmoother()
+    score_smoothed = helpers.WindowedExpSmoother()  # Er ikke sikker på hvad det her er.
 
     # prepare modified base paramter tensors
-    network_is_catmod = is_cat_mod_model(network)
+    network_is_catmod = is_cat_mod_model(network)  # Returnerer false da vi ikke har modified bases
     mod_factor_t = torch.tensor(args.mod_factor, dtype=torch.float32).to(device)
     can_mods_offsets = (network.sublayers[-1].can_mods_offsets
                         if network_is_catmod else None)
     # mod cat inv freq weighting is currently disabled. Compute and set this
     # value to enable mod cat weighting
-    mod_cat_weights = np.ones(alphabet_info.nbase, dtype=np.float32)
+    mod_cat_weights = np.ones(alphabet_info.nbase, dtype=np.float32)  # irrelevant for os
 
     #Generating list of batches for standard loss reporting
     reporting_chunk_len = (args.chunk_len_min + args.chunk_len_max) // 2
@@ -391,6 +415,7 @@ def main():
                                args.min_sub_batch_size,
                                args.reporting_sub_batches, alphabet_info,
                                filter_params, network, network_is_catmod, log))
+    print(reporting_batch_list[1])
 
     log.write( ('* Standard loss report: chunk length = {} & sub-batch size ' +
                 '= {} for {} sub-batches. \n').format(reporting_chunk_len,
@@ -405,7 +430,7 @@ def main():
         log.write('* Gradient L2 norm cap will be upper' +
                   ' {:3.2f} quantile of the last {} norms.\n'.format(
                           args.gradient_cap_fraction, rolling_quantile.window))
-
+        # This is used for gradient clipping. This helps to avoid exploding gradients: https://hackernoon.com/gradient-clipping-57f04f0adae
 
     total_bases = 0
     total_samples = 0
@@ -431,13 +456,14 @@ def main():
         sub_batch_size = int( args.min_sub_batch_size * args.chunk_len_max /
                               batch_chunk_len + 0.5)
 
-        optimizer.zero_grad()
+        optimizer.zero_grad()  # Clears the gradients of all parameters
 
         main_batch_gen = prepare_random_batches(device, read_data,
                                                 batch_chunk_len, sub_batch_size,
                                                 args.sub_batches, alphabet_info,
                                                 filter_params, network,
                                                 network_is_catmod, log)
+        # Go read prepare_random_batches
 
         chunk_count, fval, chunk_samples, chunk_bases, batch_rejections = \
                             calculate_loss( network, network_is_catmod,

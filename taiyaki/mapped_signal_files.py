@@ -21,16 +21,18 @@ class Read(dict):
 
     Much of the code in this class definition is the checking functions, which
     check that the data is consistent with the 'Chunkify version 7 discussion'
-    https://wiki/display/RES/Chunkify+version+7+discussion
+    https://wiki/display/RES/Chunkify+version+7+discussion #  Hvad er det her for et åndsvagt link??
 
     range,offset and digitisation describe the mapping from Dacs to current in pA:
 
-    current = (dacs + offset ) * range / digitisation
+    current = (dacs + offset ) * range / digitisation  # SUPER VIGTIG AT FÅ MED I RAPPORTEN!
+    Outputter MinION i dacs fra start af, eller er det taiyaki preprocessering som konverterer til dacs?
 
     scale_frompA and shift_frompA describe the mapping from current in pA to
     standardised numbers for training:
 
-    standardised_current = ( current - shift ) / scale
+    standardised_current = ( current - shift ) / scale  # Jeg er ikke sikker på hvorfor det her er vigigt.
+    Måske fordi degration, temperaturer og andet støj påvirker signalet
 
     Ref_to_signal[n] is the location in Dacs corresponding to base n in Reference.
 
@@ -549,6 +551,7 @@ class HDF5Reader(AbstractMappedSignalReader):
         """Return a read object (see class definition above)."""
         h = self.hdf5[self._get_read_path(read_id)]
         d = {}
+        # Jeg er usikker på præcis hvad der er keys og values her, og hvad de forskellige .items() returnerer.
         for k, v in h.items():  # Iterate over datasets (the read group should have no subgroups)
             d[k] = v[()]
         for k, v in h.attrs.items():  # iterate over attributes

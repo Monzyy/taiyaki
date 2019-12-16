@@ -190,7 +190,8 @@ class Softmax(nn.Module):
 
 
 class CudnnGru(nn.Module):
-    """ Gated Recurrent Unit compatable with cudnn
+    """ Gated Recurrent Unit compatable with cudnn.
+    cuDNN is nvidias Deep Neural Network library for GPU acceleration which Guppy use.
 
     :param insize: Size of input to layer
     :param size: Layer size

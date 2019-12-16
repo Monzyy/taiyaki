@@ -13,3 +13,6 @@ venv
 run
 .cache
 .tox
+taiyaki_walkthrough
+.idea
+.DS_Store

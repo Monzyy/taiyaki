@@ -24,7 +24,7 @@ def flopmask(labels):
 
 def flipflop_code(labels, alphabet_length=4):
     """Given a list of digits representing bases, add offset to those in even
-    positions within runs of indentical bases.
+    positions within runs of indentical bases.  # Dette her er kernen af flipflop!!!
     param labels : np array of digits representing bases (usually 0-3 for ACGT)
     param alphabet_length : number of symbols in alphabet
     returns: np array c such that c[n] = labels[n] + alphabet_length where labels[n] is in
