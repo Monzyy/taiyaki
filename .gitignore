@@ -15,3 +15,5 @@ run
 .tox
 .idea
 .DS_Store
+*.hdf5
+*.npy

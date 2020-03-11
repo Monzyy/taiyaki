@@ -3,103 +3,12 @@ import argparse
 from collections import defaultdict
 import numpy as np
 import os
+from os import path
 from shutil import copyfile
 import sys
 import time
 
 import torch
-
-
-from taiyaki import (alphabet, chunk_selection, constants, ctc, flipflopfings,
-                     helpers, layers, mapped_signal_files, maths, optim)
-from taiyaki.cmdargs import AutoBool, FileExists, Maybe, NonNegative, Positive
-from taiyaki.common_cmdargs import add_common_command_args
-from taiyaki.constants import DOTROWLENGTH
-
-
-# This is here, not in main to allow documentation to be built
-parser = argparse.ArgumentParser(description='Train flip-flop neural network',
-                        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-
-add_common_command_args(parser, """adam device eps filter_max_dwell
-                                   filter_mean_dwell limit lr_cosine_iters
-                                   niteration outdir overwrite quiet save_every
-                                   sample_nreads_before_filtering version
-                                   weight_decay""".split())
-
-parser.add_argument('--chunk_len_min', default=2000, metavar='samples',
-                    type=Positive(int),
-                    help='Min length of each chunk in samples' +
-                         ' (chunk lengths are random between min and max)')
-parser.add_argument('--chunk_len_max', default=4000, metavar='samples',
-                    type=Positive(int),
-                    help='Max length of each chunk in samples ' +
-                         '(chunk lengths are random between min and max)')
-parser.add_argument('--full_filter_status', default=False, action=AutoBool,
-                    help='Output full chunk filtering statistics. ' +
-                         'Default: only proportion of filtered chunks.')
-parser.add_argument('--gradient_cap_fraction', default=0.05, metavar = 'f',
-                    type=Maybe(NonNegative(float)),
-                    help='Cap L2 norm of gradient so that a fraction f of ' +
-                         'gradients are capped. ' +
-                         'Use --gradient_cap_fraction None for no capping.')
-parser.add_argument('--input_strand_list', default=None, action=FileExists,
-                    help='Strand summary file containing column read_id. '+
-                         'Filenames in file are ignored.')
-#Argument local_rank is used only by when the script is run in multi-GPU
-#mode using torch.distributed.launch. See the README.
-parser.add_argument('--local_rank', type=int, default=None,
-                    help = argparse.SUPPRESS)
-parser.add_argument('--lr_cosine_iters', default=40000, metavar='n',
-                    type=Positive(float),
-                    help='Learning rate decreases from max to min ' +
-                         'like cosine function over n batches')
-parser.add_argument('--lr_frac_decay', default=None, metavar='k',
-                    type=Positive(int),
-                    help='If specified, use fractional learning rate ' +
-                          'schedule, rate=lr_max*k/(k+t)')
-parser.add_argument('--lr_max', default=2.0e-3, metavar='rate',
-                    type=Positive(float),
-                    help='Max (and starting) learning rate')
-parser.add_argument('--lr_min', default=1.0e-4, metavar='rate',
-                    type=Positive(float), help='Min (and final) learning rate')
-parser.add_argument('--min_sub_batch_size', default=96, metavar='chunks',
-                    type=Positive(int),
-                    help='Number of chunks to run in parallel per sub-batch ' +
-                    'for chunk_len = chunk_len_max. Actual length of ' +
-                    'sub-batch used is ' +
-                    '(min_sub_batch_size * chunk_len_max / chunk_len).')
-parser.add_argument('--mod_factor', type=float, default=0.1,
-                    help='Relative modified base weight (compared to ' +
-                    'canonical transitions) in loss/gradient (only ' +
-                    'applicable for modified base models).')
-parser.add_argument('--reporting_sub_batches', default=10,
-                    metavar='sub_batches', type=Positive(int),
-                    help='Number of sub-batches to use for std loss reporting')
-parser.add_argument('--seed', default=None, metavar='integer',
-                    type=Positive(int),
-                    help='Set random number seed')
-parser.add_argument('--sharpen', default=1.0, metavar='factor',
-                    type=Positive(float), help='Sharpening factor')
-parser.add_argument('--size', default=256, metavar='neurons',
-                    type=Positive(int), help='Base layer size for model')
-parser.add_argument('--stride', default=2, metavar='samples',
-                    type=Positive(int), help='Stride for model')
-parser.add_argument('--sub_batches', default=1, metavar='sub_batches',
-                    type=Positive(int),
-                    help='Number of sub-batches per batch')
-parser.add_argument('--warmup_batches', type=int, default=200,
-                    help = 'For the first n batches, ' +
-                    'warm up at a low learning rate.')
-parser.add_argument('--lr_warmup', type=float, default=None,
-                    help = "Learning rate used for warmup. Defaults to lr_min")
-parser.add_argument('--winlen', default=19, type=Positive(int),
-                    help='Length of window over data')
-
-parser.add_argument('model', action=FileExists,
-                    help='File to read python model (or checkpoint) from')
-parser.add_argument('input', action=FileExists,
-                    help='file containing mapped reads')
 
 
 def is_cat_mod_model(network):
@@ -528,4 +437,94 @@ def main():
 
 
 if __name__ == '__main__':
+    sys.path.append(path.join(path.dirname(path.dirname(path.abspath(__file__))), 'taiyaki'))
+    from taiyaki import (alphabet, chunk_selection, constants, ctc, flipflopfings,
+                         helpers, layers, mapped_signal_files, maths, optim)
+    from taiyaki.cmdargs import AutoBool, FileExists, Maybe, NonNegative, Positive
+    from taiyaki.common_cmdargs import add_common_command_args
+    from taiyaki.constants import DOTROWLENGTH
+
+    # This is here, not in main to allow documentation to be built
+    parser = argparse.ArgumentParser(description='Train flip-flop neural network',
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+    add_common_command_args(parser, """adam device eps filter_max_dwell
+                                       filter_mean_dwell limit lr_cosine_iters
+                                       niteration outdir overwrite quiet save_every
+                                       sample_nreads_before_filtering version
+                                       weight_decay""".split())
+
+    parser.add_argument('--chunk_len_min', default=2000, metavar='samples',
+                        type=Positive(int),
+                        help='Min length of each chunk in samples' +
+                             ' (chunk lengths are random between min and max)')
+    parser.add_argument('--chunk_len_max', default=4000, metavar='samples',
+                        type=Positive(int),
+                        help='Max length of each chunk in samples ' +
+                             '(chunk lengths are random between min and max)')
+    parser.add_argument('--full_filter_status', default=False, action=AutoBool,
+                        help='Output full chunk filtering statistics. ' +
+                             'Default: only proportion of filtered chunks.')
+    parser.add_argument('--gradient_cap_fraction', default=0.05, metavar='f',
+                        type=Maybe(NonNegative(float)),
+                        help='Cap L2 norm of gradient so that a fraction f of ' +
+                             'gradients are capped. ' +
+                             'Use --gradient_cap_fraction None for no capping.')
+    parser.add_argument('--input_strand_list', default=None, action=FileExists,
+                        help='Strand summary file containing column read_id. ' +
+                             'Filenames in file are ignored.')
+    # Argument local_rank is used only by when the script is run in multi-GPU
+    # mode using torch.distributed.launch. See the README.
+    parser.add_argument('--local_rank', type=int, default=None,
+                        help=argparse.SUPPRESS)
+    parser.add_argument('--lr_cosine_iters', default=40000, metavar='n',
+                        type=Positive(float),
+                        help='Learning rate decreases from max to min ' +
+                             'like cosine function over n batches')
+    parser.add_argument('--lr_frac_decay', default=None, metavar='k',
+                        type=Positive(int),
+                        help='If specified, use fractional learning rate ' +
+                             'schedule, rate=lr_max*k/(k+t)')
+    parser.add_argument('--lr_max', default=2.0e-3, metavar='rate',
+                        type=Positive(float),
+                        help='Max (and starting) learning rate')
+    parser.add_argument('--lr_min', default=1.0e-4, metavar='rate',
+                        type=Positive(float), help='Min (and final) learning rate')
+    parser.add_argument('--min_sub_batch_size', default=96, metavar='chunks',
+                        type=Positive(int),
+                        help='Number of chunks to run in parallel per sub-batch ' +
+                             'for chunk_len = chunk_len_max. Actual length of ' +
+                             'sub-batch used is ' +
+                             '(min_sub_batch_size * chunk_len_max / chunk_len).')
+    parser.add_argument('--mod_factor', type=float, default=0.1,
+                        help='Relative modified base weight (compared to ' +
+                             'canonical transitions) in loss/gradient (only ' +
+                             'applicable for modified base models).')
+    parser.add_argument('--reporting_sub_batches', default=10,
+                        metavar='sub_batches', type=Positive(int),
+                        help='Number of sub-batches to use for std loss reporting')
+    parser.add_argument('--seed', default=None, metavar='integer',
+                        type=Positive(int),
+                        help='Set random number seed')
+    parser.add_argument('--sharpen', default=1.0, metavar='factor',
+                        type=Positive(float), help='Sharpening factor')
+    parser.add_argument('--size', default=256, metavar='neurons',
+                        type=Positive(int), help='Base layer size for model')
+    parser.add_argument('--stride', default=2, metavar='samples',
+                        type=Positive(int), help='Stride for model')
+    parser.add_argument('--sub_batches', default=1, metavar='sub_batches',
+                        type=Positive(int),
+                        help='Number of sub-batches per batch')
+    parser.add_argument('--warmup_batches', type=int, default=200,
+                        help='For the first n batches, ' +
+                             'warm up at a low learning rate.')
+    parser.add_argument('--lr_warmup', type=float, default=None,
+                        help="Learning rate used for warmup. Defaults to lr_min")
+    parser.add_argument('--winlen', default=19, type=Positive(int),
+                        help='Length of window over data')
+
+    parser.add_argument('model', action=FileExists,
+                        help='File to read python model (or checkpoint) from')
+    parser.add_argument('input', action=FileExists,
+                        help='file containing mapped reads')
     main()
