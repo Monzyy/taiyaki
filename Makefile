@@ -33,7 +33,7 @@ show_cuda_version:
 	@echo 'Will install cupy with: ' $(if $(CUPY), pip install $(CUPY), **not installing cupy**)
 
 
-envDir = venv
+envDir = $(HOME)/venvs/tainito
 envPrompt ?= "(taiyaki) "
 pyTestArgs ?=
 override pyTestArgs += --durations=20 -v

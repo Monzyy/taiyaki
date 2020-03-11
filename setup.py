@@ -16,12 +16,12 @@ install_requires = [
     "numpy >= 1.14.5",
     "biopython >= 1.63",
     "Cython >= 0.25.2",
-    "ont_fast5_api >= 1.2.0",
+    "ont_fast5_api >= 3.0.1",
     "matplotlib >= 2.0.0",
     "pysam >= 0.15.0",
     "scipy >= 1",
     "statsmodels >= 0.10.1",
-    "torch == 1.2"
+    "torch == 1.4"
 ]
 
 
