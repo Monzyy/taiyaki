@@ -13,15 +13,20 @@ version = taiyaki.__version__
 # Used by pip
 install_requires = [
     "h5py >= 2.2.1",
-    "numpy >= 1.14.5",
+    "numpy >= 1.15.5",
     "biopython >= 1.63",
     "Cython >= 0.25.2",
-    "ont_fast5_api >= 1.2.0",
+    "ont_fast5_api >= 3.0.1",
     "matplotlib >= 2.0.0",
     "pysam >= 0.15.0",
     "scipy >= 1",
     "statsmodels >= 0.10.1",
-    "torch == 1.2"
+    "torch == 1.4.0",
+    "toml==0.10.0",
+    "tqdm==4.31.1",
+    "optuna==1.1.0",
+    "parasail==1.2",
+    "fast-ctc-decode==0.1.3"
 ]
 
 

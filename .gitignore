@@ -13,3 +13,6 @@ venv
 run
 .cache
 .tox
+.idea/
+*.hdf5
+*.npy

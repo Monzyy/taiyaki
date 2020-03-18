@@ -79,6 +79,8 @@ class FlipFlopCRF(torch.autograd.Function):
         seqs = seqs.cpu().numpy().astype(np.int32)
         seqlen = seqlen.cpu().numpy().astype(np.int32)
         sharpfact = float(sharpfact)
+        lp = lp.copy(order='C') # Do this otherwise this throws: "ValueError: ndarray is not C-contiguous"
+
         if logprob.requires_grad:
             cost, grads = crf_flipflop_grad(lp, seqs, seqlen, sharpfact)
             ctx.save_for_backward(torch.tensor(grads, device=logprob.device))
