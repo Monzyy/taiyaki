@@ -1,5 +1,5 @@
 h5py >= 2.2.1,<=2.6.0
-numpy >= 1.14.5
+numpy >= 1.15.4
 biopython >= 1.63
 Cython >= 0.25.2
 wheel >= 0.29.0
@@ -9,3 +9,8 @@ matplotlib >= 2.0.0
 scipy >= 1
 statsmodels >= 0.10.1
 torch == 1.4.0
+toml==0.10.0
+tqdm==4.31.1
+optuna==1.1.0
+parasail==1.2
+fast-ctc-decode==0.1.3
